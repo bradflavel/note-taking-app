@@ -1,10 +1,18 @@
 "use client";
-import { useState } from "react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useNote } from "@/hooks/useNote";
 
 export default function Home() {
-  const [markdown, setMarkdown] = useState("");
+  const { markdown, setMarkdown, isLoading } = useNote();
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    );
+  }
   return (
     <div className="flex h-screen">
       <div className="w-64 border-r overflow-y-auto p-4">
