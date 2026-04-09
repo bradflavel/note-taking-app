@@ -9,11 +9,19 @@ import {
   updateNoteTitle,
   getNoteById,
   softDeleteNote,
+  moveNoteToFolder,
 } from "@/lib/notes"
+import {
+  createFolder,
+  getAllFolders,
+  renameFolder,
+  softDeleteFolder,
+} from "@/lib/folders"
+import type { Folder } from "@/lib/db"
 
 const SAVE_DELAY_MS = 500
 
-// Grab the title from the first line of markdown (strips leading # symbols)
+// pull the title from the first line, stripping any leading #'s
 function extractTitle(markdown: string): string {
   const firstLine = markdown.split("\n")[0]?.replace(/^#+\s*/, "").trim()
   return firstLine || "Untitled"
@@ -24,8 +32,9 @@ export function useNote() {
   const [markdown, setMarkdownState] = useState("")
   const [isLoading, setIsLoading] = useState(true)
 
-  // The list of all notes shown in the sidebar (lightweight — no body content)
-  const [notes, setNotes] = useState<{ id: number; title: string; updatedAt: Date }[]>([])
+  // sidebar data
+  const [notes, setNotes] = useState<{ id: number; title: string; updatedAt: Date; folderId: number | null }[]>([])
+  const [folders, setFolders] = useState<Folder[]>([])
 
   const initialized = useRef(false)
   const skipNextSave = useRef(true)
@@ -33,12 +42,11 @@ export function useNote() {
   const latestMarkdownRef = useRef(markdown)
   const noteIdRef = useRef(noteId)
 
-  // Keep refs in sync with state so our cleanup/flush functions always have the latest values
+  // keep refs in sync so flush/cleanup always has the latest values
   latestMarkdownRef.current = markdown
   noteIdRef.current = noteId
 
-  // Save immediately — cancels any pending debounce timer first.
-  // Think of this as the app hitting Ctrl+S for you before switching notes.
+  // force-save now — cancels any pending debounce and writes immediately
   const flushSave = useCallback(async () => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current)
@@ -49,7 +57,7 @@ export function useNote() {
       await saveNote(noteIdRef.current, latestMarkdownRef.current)
       await updateNoteTitle(noteIdRef.current, title)
 
-      // Also update the sidebar so the title shows the latest text
+      // update sidebar to match
       const savedId = noteIdRef.current
       setNotes((prev) =>
         prev.map((n) => (n.id === savedId ? { ...n, title, updatedAt: new Date() } : n))
@@ -57,7 +65,7 @@ export function useNote() {
     }
   }, [])
 
-  // Load or create a note on mount, and fetch the full note list for the sidebar
+  // on mount: load existing note or create a default, then populate sidebar
   useEffect(() => {
     if (initialized.current) return
     initialized.current = true
@@ -73,9 +81,12 @@ export function useNote() {
         setMarkdownState(created.body)
       }
 
-      // Load the sidebar list
+      // populate sidebar
       const allNotes = await getAllNotes()
       setNotes(allNotes)
+
+      const allFolders = await getAllFolders()
+      setFolders(allFolders)
 
       setIsLoading(false)
     }
@@ -83,7 +94,7 @@ export function useNote() {
     init()
   }, [])
 
-  // Debounced save — waits 500ms after the user stops typing, then persists
+  // auto-save 500ms after the user stops typing
   useEffect(() => {
     if (isLoading || noteId === null) return
 
@@ -97,7 +108,7 @@ export function useNote() {
       saveNote(noteId, markdown)
       updateNoteTitle(noteId, title)
 
-      // Update the sidebar list so titles stay fresh without re-reading the database
+      // keep sidebar title in sync
       setNotes((prev) =>
         prev.map((n) => (n.id === noteId ? { ...n, title, updatedAt: new Date() } : n))
       )
@@ -108,7 +119,7 @@ export function useNote() {
     }
   }, [markdown, noteId, isLoading])
 
-  // Safety net — flush any unsaved changes if the component unmounts
+  // flush on unmount so we don't lose unsaved changes
   useEffect(() => {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
@@ -122,42 +133,46 @@ export function useNote() {
     setMarkdownState(value)
   }, [])
 
-  // Switch to a different note — saves the current one first so nothing is lost
+  // switch to a different note (flushes current note first)
   const selectNote = useCallback(async (id: number) => {
     await flushSave()
 
     const note = await getNoteById(id)
     if (!note) return
 
-    // Tell the auto-save to skip the next change (it's a load, not an edit)
+    // skip the next auto-save — this is a load, not a user edit
     skipNextSave.current = true
     setNoteId(note.id)
     setMarkdownState(note.body)
   }, [flushSave])
 
-  // Create a brand new note and switch to it
-  const createNote = useCallback(async () => {
+  // create a blank note and switch to it
+  // if folderId is passed, use that; otherwise inherit from the active note
+  const createNote = useCallback(async (folderId?: number | null) => {
     await flushSave()
 
-    const note = await createDefaultNote()
+    const targetFolderId = folderId !== undefined
+      ? folderId
+      : (notes.find((n) => n.id === noteIdRef.current)?.folderId ?? null)
+
+    const note = await createDefaultNote(targetFolderId)
 
     skipNextSave.current = true
     setNoteId(note.id)
     setMarkdownState(note.body)
 
-    // Add the new note to the top of the sidebar list
+    // put it at the top of the sidebar
     setNotes((prev) => [
-      { id: note.id, title: note.title, updatedAt: note.updatedAt },
+      { id: note.id, title: note.title, updatedAt: note.updatedAt, folderId: note.folderId },
       ...prev,
     ])
-  }, [flushSave])
+  }, [flushSave, notes])
 
-  // Delete a note and figure out what to show next — like closing a browser tab.
+  // delete a note and switch to another one (or create a new one if none left)
   const deleteNote = useCallback(async (id: number) => {
     const isDeletingActiveNote = id === noteIdRef.current
 
-    // If we're deleting the note we're currently editing, cancel any pending save
-    // (no point saving something that's going to the trash)
+    // no point saving a note we're about to trash
     if (isDeletingActiveNote && timeoutRef.current) {
       clearTimeout(timeoutRef.current)
       timeoutRef.current = null
@@ -165,14 +180,12 @@ export function useNote() {
 
     await softDeleteNote(id)
 
-    // Remove the deleted note from the sidebar list
     const remaining = notes.filter((n) => n.id !== id)
     setNotes(remaining)
 
-    // If we deleted the note we were looking at, we need to switch to something else
+    // if we deleted the active note, switch to another one
     if (isDeletingActiveNote) {
       if (remaining.length > 0) {
-        // Switch to the most recent note (first in the list)
         const next = await getNoteById(remaining[0].id)
         if (next) {
           skipNextSave.current = true
@@ -180,15 +193,93 @@ export function useNote() {
           setMarkdownState(next.body)
         }
       } else {
-        // No notes left — create a fresh blank one
+        // nothing left, start fresh
         const fresh = await createDefaultNote()
         skipNextSave.current = true
         setNoteId(fresh.id)
         setMarkdownState(fresh.body)
-        setNotes([{ id: fresh.id, title: fresh.title, updatedAt: fresh.updatedAt }])
+        setNotes([{ id: fresh.id, title: fresh.title, updatedAt: fresh.updatedAt, folderId: fresh.folderId }])
       }
     }
   }, [notes])
 
-  return { markdown, setMarkdown, isLoading, notes, noteId, selectNote, createNote, deleteNote }
+  // --- folder operations ---
+
+  // create a folder (top-level by default, or nested if parentId is given)
+  const addFolder = useCallback(async (title: string, parentId: number | null = null) => {
+    const folder = await createFolder(title, parentId)
+    setFolders((prev) => [...prev, folder].sort((a, b) => a.title.localeCompare(b.title)))
+  }, [])
+
+  // rename a folder and re-sort the list
+  const editFolderName = useCallback(async (id: number, title: string) => {
+    await renameFolder(id, title)
+    setFolders((prev) =>
+      prev
+        .map((f) => (f.id === id ? { ...f, title, updatedAt: new Date() } : f))
+        .sort((a, b) => a.title.localeCompare(b.title))
+    )
+  }, [])
+
+  // delete a folder and everything inside it, then handle the "what do we show next?" problem
+  const removeFolder = useCallback(async (id: number) => {
+    // collect all folder IDs in the subtree (handles nested folders)
+    const folderIds = new Set<number>()
+    const queue = [id]
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      folderIds.add(current)
+      for (const f of folders) {
+        if (f.parentFolder === current) queue.push(f.id)
+      }
+    }
+
+    // check if the active note is inside a folder we're about to delete
+    const activeWasInDeletedFolder =
+      noteIdRef.current !== null &&
+      notes.some((n) => n.id === noteIdRef.current && n.folderId !== null && folderIds.has(n.folderId))
+
+    if (activeWasInDeletedFolder && timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+
+    await softDeleteFolder(id)
+
+    const remainingNotes = notes.filter((n) => n.folderId === null || !folderIds.has(n.folderId))
+    setNotes(remainingNotes)
+    setFolders((prev) => prev.filter((f) => !folderIds.has(f.id)))
+
+    // if the active note got caught in the cascade, switch to something else
+    if (activeWasInDeletedFolder) {
+      if (remainingNotes.length > 0) {
+        const next = await getNoteById(remainingNotes[0].id)
+        if (next) {
+          skipNextSave.current = true
+          setNoteId(next.id)
+          setMarkdownState(next.body)
+        }
+      } else {
+        const fresh = await createDefaultNote()
+        skipNextSave.current = true
+        setNoteId(fresh.id)
+        setMarkdownState(fresh.body)
+        setNotes([{ id: fresh.id, title: fresh.title, updatedAt: fresh.updatedAt, folderId: fresh.folderId }])
+      }
+    }
+  }, [notes, folders])
+
+  // move a note into a different folder (or to root with null)
+  const moveNote = useCallback(async (targetNoteId: number, targetFolderId: number | null) => {
+    await moveNoteToFolder(targetNoteId, targetFolderId)
+    setNotes((prev) =>
+      prev.map((n) => (n.id === targetNoteId ? { ...n, folderId: targetFolderId, updatedAt: new Date() } : n))
+    )
+  }, [])
+
+  return {
+    markdown, setMarkdown, isLoading,
+    notes, noteId, selectNote, createNote, deleteNote,
+    folders, addFolder, editFolderName, removeFolder, moveNote,
+  }
 }
