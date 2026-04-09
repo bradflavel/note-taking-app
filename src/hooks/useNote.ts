@@ -10,6 +10,7 @@ import {
   getNoteById,
   softDeleteNote,
   moveNoteToFolder,
+  updateNoteTags,
 } from "@/lib/notes"
 import {
   createFolder,
@@ -35,6 +36,7 @@ export function useNote() {
   // sidebar data
   const [notes, setNotes] = useState<{ id: number; title: string; updatedAt: Date; folderId: number | null }[]>([])
   const [folders, setFolders] = useState<Folder[]>([])
+  const [tags, setTags] = useState<string[]>([])
 
   const initialized = useRef(false)
   const skipNextSave = useRef(true)
@@ -75,10 +77,12 @@ export function useNote() {
       if (existing) {
         setNoteId(existing.id)
         setMarkdownState(existing.body)
+        setTags(existing.tags)
       } else {
         const created = await createDefaultNote()
         setNoteId(created.id)
         setMarkdownState(created.body)
+        setTags(created.tags)
       }
 
       // populate sidebar
@@ -144,6 +148,7 @@ export function useNote() {
     skipNextSave.current = true
     setNoteId(note.id)
     setMarkdownState(note.body)
+    setTags(note.tags)
   }, [flushSave])
 
   // create a blank note and switch to it
@@ -160,6 +165,7 @@ export function useNote() {
     skipNextSave.current = true
     setNoteId(note.id)
     setMarkdownState(note.body)
+    setTags(note.tags)
 
     // put it at the top of the sidebar
     setNotes((prev) => [
@@ -191,6 +197,7 @@ export function useNote() {
           skipNextSave.current = true
           setNoteId(next.id)
           setMarkdownState(next.body)
+          setTags(next.tags)
         }
       } else {
         // nothing left, start fresh
@@ -198,6 +205,7 @@ export function useNote() {
         skipNextSave.current = true
         setNoteId(fresh.id)
         setMarkdownState(fresh.body)
+        setTags(fresh.tags)
         setNotes([{ id: fresh.id, title: fresh.title, updatedAt: fresh.updatedAt, folderId: fresh.folderId }])
       }
     }
@@ -258,12 +266,14 @@ export function useNote() {
           skipNextSave.current = true
           setNoteId(next.id)
           setMarkdownState(next.body)
+          setTags(next.tags)
         }
       } else {
         const fresh = await createDefaultNote()
         skipNextSave.current = true
         setNoteId(fresh.id)
         setMarkdownState(fresh.body)
+        setTags(fresh.tags)
         setNotes([{ id: fresh.id, title: fresh.title, updatedAt: fresh.updatedAt, folderId: fresh.folderId }])
       }
     }
@@ -277,9 +287,30 @@ export function useNote() {
     )
   }, [])
 
+  // add a tag to the current note (lowercased, no duplicates)
+  const addTag = useCallback(async (tag: string) => {
+    const normalized = tag.toLowerCase().trim()
+    if (!normalized || noteIdRef.current === null) return
+    if (tags.includes(normalized)) return
+
+    const updated = [...tags, normalized]
+    setTags(updated)
+    await updateNoteTags(noteIdRef.current, updated)
+  }, [tags])
+
+  // remove a tag from the current note
+  const removeTag = useCallback(async (tag: string) => {
+    if (noteIdRef.current === null) return
+
+    const updated = tags.filter((t) => t !== tag)
+    setTags(updated)
+    await updateNoteTags(noteIdRef.current, updated)
+  }, [tags])
+
   return {
     markdown, setMarkdown, isLoading,
     notes, noteId, selectNote, createNote, deleteNote,
     folders, addFolder, editFolderName, removeFolder, moveNote,
+    tags, addTag, removeTag,
   }
 }

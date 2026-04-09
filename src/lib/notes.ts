@@ -49,6 +49,11 @@ export async function softDeleteNote(id: number): Promise<void> {
   await db.notes.update(id, { deletedAt: new Date() })
 }
 
+// replace the full tags array for a note
+export async function updateNoteTags(id: number, tags: string[]): Promise<void> {
+  await db.notes.update(id, { tags })
+}
+
 // Move a note into a folder (or pass null to move it back to top level)
 export async function moveNoteToFolder(
   noteId: number,

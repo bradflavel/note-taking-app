@@ -10,6 +10,7 @@ export default function Home() {
     markdown, setMarkdown, isLoading,
     notes, noteId, selectNote, createNote, deleteNote,
     folders, addFolder, editFolderName, removeFolder, moveNote,
+    tags, addTag, removeTag,
   } = useNote();
 
   // which folders are closed (all start open)
@@ -25,6 +26,9 @@ export default function Home() {
 
   // which note's "move to folder" menu is open
   const [movingNoteId, setMovingNoteId] = useState<number | null>(null);
+
+  // tag input
+  const [tagInput, setTagInput] = useState("");
 
   if (isLoading) {
     return (
@@ -313,6 +317,39 @@ export default function Home() {
         {rootNotes.map((note) => renderNoteRow(note, 0))}
       </div>
       <div className="flex flex-col flex-1 border-r overflow-y-auto p-4">
+        {/* tag bar */}
+        <div className="flex flex-wrap items-center gap-2 mb-2 min-h-[28px]">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full
+                         bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+            >
+              {tag}
+              <button
+                onClick={() => removeTag(tag)}
+                className="text-gray-400 hover:text-red-500 cursor-pointer"
+              >
+                &#x2715;
+              </button>
+            </span>
+          ))}
+          <input
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && tagInput.trim()) {
+                addTag(tagInput.trim());
+                setTagInput("");
+              }
+              if (e.key === "Escape") {
+                setTagInput("");
+              }
+            }}
+            placeholder="Add tag..."
+            className="text-xs bg-transparent outline-none w-24"
+          />
+        </div>
         <textarea
           value={markdown}
           onChange={(e) => setMarkdown(e.target.value)}
