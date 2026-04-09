@@ -54,6 +54,25 @@ export async function updateNoteTags(id: number, tags: string[]): Promise<void> 
   await db.notes.update(id, { tags })
 }
 
+// case-insensitive substring search across title, body, and tags
+export async function searchNotes(query: string): Promise<Pick<Note, "id" | "title" | "updatedAt" | "folderId">[]> {
+  const q = query.toLowerCase()
+  const notes = await db.notes
+    .filter((note) => {
+      if (note.deletedAt !== null) return false
+      return (
+        note.title.toLowerCase().includes(q) ||
+        note.body.toLowerCase().includes(q) ||
+        note.tags.some((tag) => tag.toLowerCase().includes(q))
+      )
+    })
+    .toArray()
+
+  return notes
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .map(({ id, title, updatedAt, folderId }) => ({ id, title, updatedAt, folderId }))
+}
+
 // Move a note into a folder (or pass null to move it back to top level)
 export async function moveNoteToFolder(
   noteId: number,

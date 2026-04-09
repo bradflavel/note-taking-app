@@ -11,6 +11,7 @@ import {
   softDeleteNote,
   moveNoteToFolder,
   updateNoteTags,
+  searchNotes,
 } from "@/lib/notes"
 import {
   createFolder,
@@ -37,6 +38,11 @@ export function useNote() {
   const [notes, setNotes] = useState<{ id: number; title: string; updatedAt: Date; folderId: number | null }[]>([])
   const [folders, setFolders] = useState<Folder[]>([])
   const [tags, setTags] = useState<string[]>([])
+
+  // search
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<{ id: number; title: string; updatedAt: Date; folderId: number | null }[]>([])
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const initialized = useRef(false)
   const skipNextSave = useRef(true)
@@ -307,10 +313,28 @@ export function useNote() {
     await updateNoteTags(noteIdRef.current, updated)
   }, [tags])
 
+  // debounced search — 200ms after the user stops typing
+  const setSearch = useCallback((query: string) => {
+    setSearchQuery(query)
+
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+
+    if (!query.trim()) {
+      setSearchResults([])
+      return
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      const results = await searchNotes(query.trim())
+      setSearchResults(results)
+    }, 200)
+  }, [])
+
   return {
     markdown, setMarkdown, isLoading,
     notes, noteId, selectNote, createNote, deleteNote,
     folders, addFolder, editFolderName, removeFolder, moveNote,
     tags, addTag, removeTag,
+    searchQuery, searchResults, setSearch,
   }
 }

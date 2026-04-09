@@ -11,6 +11,7 @@ export default function Home() {
     notes, noteId, selectNote, createNote, deleteNote,
     folders, addFolder, editFolderName, removeFolder, moveNote,
     tags, addTag, removeTag,
+    searchQuery, searchResults, setSearch,
   } = useNote();
 
   // which folders are closed (all start open)
@@ -262,59 +263,82 @@ export default function Home() {
           }
         }}
       >
-        {/* button row */}
-        <div className="flex gap-2 mb-4">
-          <button
-            onClick={() => createNote()}
-            className="flex-1 px-3 py-2 text-sm font-medium rounded cursor-pointer
-                       bg-gray-100 hover:bg-gray-200
-                       dark:bg-gray-800 dark:hover:bg-gray-700"
-          >
-            + Note
-          </button>
-          <button
-            onClick={() => {
-              setCreatingFolderParentId(null);
-              setNewFolderName("");
-            }}
-            className="flex-1 px-3 py-2 text-sm font-medium rounded cursor-pointer
-                       bg-gray-100 hover:bg-gray-200
-                       dark:bg-gray-800 dark:hover:bg-gray-700"
-          >
-            + Folder
-          </button>
-        </div>
+        {/* search */}
+        <input
+          value={searchQuery}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setSearch("");
+          }}
+          placeholder="Search notes..."
+          className="w-full px-3 py-1.5 mb-3 text-sm rounded border border-gray-200 dark:border-gray-700
+                     bg-transparent outline-none"
+        />
 
-        {/* inline input for new top-level folder */}
-        {creatingFolderParentId === null && (
-          <div className="flex items-center px-3 py-1.5 mb-1">
-            <span className="mr-1 text-gray-400 text-xs">▼</span>
-            <input
-              autoFocus
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              onBlur={submitNewFolder}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") e.currentTarget.blur();
-                if (e.key === "Escape") {
-                  setCreatingFolderParentId(false);
+        {searchQuery.trim() ? (
+          // flat search results
+          searchResults.length > 0 ? (
+            searchResults.map((note) => renderNoteRow(note, 0))
+          ) : (
+            <p className="text-sm text-gray-400 px-3 py-2">No results</p>
+          )
+        ) : (
+          <>
+            {/* button row */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => createNote()}
+                className="flex-1 px-3 py-2 text-sm font-medium rounded cursor-pointer
+                           bg-gray-100 hover:bg-gray-200
+                           dark:bg-gray-800 dark:hover:bg-gray-700"
+              >
+                + Note
+              </button>
+              <button
+                onClick={() => {
+                  setCreatingFolderParentId(null);
                   setNewFolderName("");
-                }
-              }}
-              placeholder="Folder name..."
-              className="flex-1 text-sm bg-transparent border-b border-gray-300 dark:border-gray-600 outline-none"
-            />
-          </div>
-        )}
+                }}
+                className="flex-1 px-3 py-2 text-sm font-medium rounded cursor-pointer
+                           bg-gray-100 hover:bg-gray-200
+                           dark:bg-gray-800 dark:hover:bg-gray-700"
+              >
+                + Folder
+              </button>
+            </div>
 
-        {/* folder tree */}
-        {childFolders(null).map((folder) => renderFolder(folder, 0))}
+            {/* inline input for new top-level folder */}
+            {creatingFolderParentId === null && (
+              <div className="flex items-center px-3 py-1.5 mb-1">
+                <span className="mr-1 text-gray-400 text-xs">▼</span>
+                <input
+                  autoFocus
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onBlur={submitNewFolder}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                    if (e.key === "Escape") {
+                      setCreatingFolderParentId(false);
+                      setNewFolderName("");
+                    }
+                  }}
+                  placeholder="Folder name..."
+                  className="flex-1 text-sm bg-transparent border-b border-gray-300 dark:border-gray-600 outline-none"
+                />
+              </div>
+            )}
 
-        {/* root-level notes (not in any folder) */}
-        {rootNotes.length > 0 && childFolders(null).length > 0 && (
-          <div className="border-t border-gray-200 dark:border-gray-700 my-2" />
+            {/* folder tree */}
+            {childFolders(null).map((folder) => renderFolder(folder, 0))}
+
+            {/* root-level notes (not in any folder) */}
+            {rootNotes.length > 0 && childFolders(null).length > 0 && (
+              <div className="border-t border-gray-200 dark:border-gray-700 my-2" />
+            )}
+            {rootNotes.map((note) => renderNoteRow(note, 0))}
+          </>
         )}
-        {rootNotes.map((note) => renderNoteRow(note, 0))}
       </div>
       <div className="flex flex-col flex-1 border-r overflow-y-auto p-4">
         {/* tag bar */}
