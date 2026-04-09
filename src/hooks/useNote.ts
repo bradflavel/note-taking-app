@@ -336,5 +336,6 @@ export function useNote() {
     folders, addFolder, editFolderName, removeFolder, moveNote,
     tags, addTag, removeTag,
     searchQuery, searchResults, setSearch,
+    flushSave,
   }
 }
