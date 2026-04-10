@@ -73,6 +73,39 @@ export async function searchNotes(query: string): Promise<Pick<Note, "id" | "tit
     .map(({ id, title, updatedAt, folderId }) => ({ id, title, updatedAt, folderId }))
 }
 
+// all deleted notes for the trash view
+export async function getDeletedNotes(): Promise<Pick<Note, "id" | "title" | "deletedAt" | "folderId">[]> {
+  const notes = await db.notes
+    .filter((note) => note.deletedAt !== null)
+    .toArray()
+
+  return notes
+    .sort((a, b) => b.deletedAt!.getTime() - a.deletedAt!.getTime())
+    .map(({ id, title, deletedAt, folderId }) => ({ id, title, deletedAt, folderId }))
+}
+
+// restore a soft-deleted note — if its folder was also deleted, move to root
+export async function restoreNote(id: number): Promise<void> {
+  const note = await db.notes.get(id)
+  if (!note) return
+
+  const updates: Partial<Note> = { deletedAt: null }
+
+  if (note.folderId !== null) {
+    const folder = await db.folders.get(note.folderId)
+    if (!folder || folder.deletedAt !== null) {
+      updates.folderId = null
+    }
+  }
+
+  await db.notes.update(id, updates)
+}
+
+// permanent removal
+export async function hardDeleteNote(id: number): Promise<void> {
+  await db.notes.delete(id)
+}
+
 // Move a note into a folder (or pass null to move it back to top level)
 export async function moveNoteToFolder(
   noteId: number,

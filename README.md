@@ -14,7 +14,7 @@ A client-side markdown note-taking app built with Next.js. Supports folders, tag
 - Tag system with per-note persistence
 - Full-text search across titles, body, and tags
 - Auto-save with 500ms debounce
-- Soft delete for notes and folders (cascade)
+- Soft delete for notes and folders (cascade) with a trash view for restore or permanent delete
 - Export notes as `.md` files
 - Keyboard shortcuts for common actions
 - Dark / light mode toggle (persisted in localStorage)
@@ -30,6 +30,7 @@ A client-side markdown note-taking app built with Next.js. Supports folders, tag
 | Tailwind CSS 4 | Utility-first styling with CSS variable theming |
 | react-markdown + remark-gfm | Markdown rendering with GFM support |
 | lucide-react | SVG icon library |
+| Vitest | Unit testing with fake-indexeddb for IndexedDB polyfill |
 | TypeScript 5 | Type safety |
 
 ## Architecture
@@ -53,7 +54,8 @@ src/
 ├── app/
 │   ├── layout.tsx          # root layout, theme script
 │   ├── page.tsx            # layout shell, keyboard shortcuts
-│   └── globals.css         # CSS variables, colour palette
+│   ├── globals.css         # CSS variables, colour palette
+│   └── trash/page.tsx      # trash view (restore / permanent delete)
 ├── components/
 │   ├── Sidebar.tsx         # folder tree, note list, search, theme toggle
 │   ├── Editor.tsx          # tag bar, markdown textarea, export
@@ -62,8 +64,9 @@ src/
 │   └── useNote.ts          # state management, auto-save, search
 └── lib/
     ├── db.ts               # Dexie schema and indexes
-    ├── notes.ts            # note CRUD, search, soft delete
-    └── folders.ts          # folder CRUD, cascade soft delete
+    ├── notes.ts            # note CRUD, search, soft delete, restore, hard delete
+    ├── folders.ts          # folder CRUD, cascade soft delete, restore, hard delete
+    └── __tests__/          # Vitest service-layer tests (notes, folders)
 ```
 
 ## Technical Decisions
@@ -89,6 +92,17 @@ src/
 | `Ctrl/Cmd + Shift + N` | New note |
 | `Ctrl/Cmd + Shift + D` | Delete note |
 
+## Testing
+
+Service-layer tests run with Vitest using `fake-indexeddb` to polyfill IndexedDB in Node. Each test clears the database beforehand so they run in isolation.
+
+```bash
+npm test          # single run
+npm run test:watch  # watch mode
+```
+
+Covers all CRUD operations in `notes.ts` and `folders.ts`, including the cascade soft-delete, cascade restore, folder-orphan handling on restore, and permanent hard-delete of folder subtrees.
+
 ## Getting Started
 
 ```bash
@@ -102,7 +116,6 @@ Open [http://localhost:3000](http://localhost:3000). All data is stored in your 
 
 ## Future Improvements
 
-- Trash view to browse and restore soft-deleted notes
 - PDF export
 - Drag-and-drop to move notes between folders
 - Markdown toolbar (bold, italic, link shortcuts)

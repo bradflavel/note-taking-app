@@ -2,7 +2,7 @@
 import { useState, type RefObject } from "react";
 import {
   Search, Plus, FolderPlus, FolderInput, FilePlus,
-  ChevronRight, ChevronDown, X, Moon, Sun,
+  ChevronRight, ChevronDown, X, Moon, Sun, Trash2,
 } from "lucide-react";
 import type { Folder } from "@/lib/db";
 
@@ -343,13 +343,21 @@ export default function Sidebar({
       )}
       </div>
 
+      <div className="mt-3 pt-3 border-t border-border flex flex-col gap-2">
+      <a
+        href="/trash"
+        className="flex items-center gap-2 text-xs text-muted-light hover:text-muted"
+      >
+        <Trash2 size={14} /> Trash
+      </a>
       <button
         onClick={toggleTheme}
-        className="mt-3 pt-3 border-t border-border flex items-center gap-2 text-xs text-muted-light hover:text-muted cursor-pointer"
+        className="flex items-center gap-2 text-xs text-muted-light hover:text-muted cursor-pointer"
       >
         {dark ? <Sun size={14} /> : <Moon size={14} />}
         {dark ? "Light mode" : "Dark mode"}
       </button>
+      </div>
     </div>
   );
 }
