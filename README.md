@@ -5,7 +5,7 @@ A client-side markdown note-taking app built with Next.js. Supports folders, tag
 <img src="screenshots/app-light.png" alt="Markdown Notes in light mode" width="100%" />
 <img src="screenshots/app-dark.png" alt="Markdown Notes in dark mode" width="100%" />
 
-**[Try it live](https://note-taking-app-zeta-ten.vercel.app/)**
+**<a href="https://note-taking-app-zeta-ten.vercel.app/" target="_blank">Try it live</a>**
 
 ## Features
 
