@@ -10,8 +10,11 @@ import {
   searchNotes,
   moveNoteToFolder,
   updateNoteTags,
+  getDeletedNotes,
+  restoreNote,
+  hardDeleteNote,
 } from "../notes";
-import { createFolder } from "../folders";
+import { createFolder, softDeleteFolder } from "../folders";
 
 beforeEach(async () => {
   await db.notes.clear();
@@ -183,5 +186,53 @@ describe("updateNoteTags", () => {
     await updateNoteTags(note.id, ["tag3"]);
     updated = await getNoteById(note.id);
     expect(updated!.tags).toEqual(["tag3"]);
+  });
+});
+
+describe("getDeletedNotes", () => {
+  it("returns only deleted notes", async () => {
+    const active = await createDefaultNote();
+    const deleted = await createDefaultNote();
+    await softDeleteNote(deleted.id);
+
+    const result = await getDeletedNotes();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe(deleted.id);
+  });
+});
+
+describe("restoreNote", () => {
+  it("clears deletedAt", async () => {
+    const note = await createDefaultNote();
+    await softDeleteNote(note.id);
+
+    await restoreNote(note.id);
+    const restored = await getNoteById(note.id);
+
+    expect(restored!.deletedAt).toBeNull();
+  });
+
+  it("moves to root if the note's folder is deleted", async () => {
+    const folder = await createFolder("Doomed");
+    const note = await createDefaultNote(folder.id);
+    await softDeleteFolder(folder.id);
+
+    await restoreNote(note.id);
+    const restored = await getNoteById(note.id);
+
+    expect(restored!.deletedAt).toBeNull();
+    expect(restored!.folderId).toBeNull();
+  });
+});
+
+describe("hardDeleteNote", () => {
+  it("permanently removes the note from the database", async () => {
+    const note = await createDefaultNote();
+
+    await hardDeleteNote(note.id);
+    const gone = await getNoteById(note.id);
+
+    expect(gone).toBeUndefined();
   });
 });
