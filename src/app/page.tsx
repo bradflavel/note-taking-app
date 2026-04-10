@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useNote } from "@/hooks/useNote";
@@ -12,7 +12,10 @@ export default function Home() {
     folders, addFolder, editFolderName, removeFolder, moveNote,
     tags, addTag, removeTag,
     searchQuery, searchResults, setSearch,
+    flushSave,
   } = useNote();
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // which folders are closed (all start open)
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
@@ -30,6 +33,44 @@ export default function Home() {
 
   // tag input
   const [tagInput, setTagInput] = useState("");
+
+  // download the current note as a .md file
+  const exportMarkdown = () => {
+    const title = markdown.split("\n")[0]?.replace(/^#+\s*/, "").trim() || "Untitled";
+    const blob = new Blob([markdown], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+
+      // ctrl+s: save, ctrl+k: search, ctrl+shift+n: new note, ctrl+shift+d: delete note
+      if (e.key === "s") {
+        e.preventDefault();
+        flushSave();
+      } else if (e.key === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === "N" && e.shiftKey) {
+        e.preventDefault();
+        createNote();
+      } else if (e.key === "D" && e.shiftKey) {
+        e.preventDefault();
+        if (noteId !== null) deleteNote(noteId);
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [flushSave, createNote, deleteNote, noteId]);
 
   if (isLoading) {
     return (
@@ -265,6 +306,7 @@ export default function Home() {
       >
         {/* search */}
         <input
+          ref={searchInputRef}
           value={searchQuery}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => {
@@ -373,6 +415,12 @@ export default function Home() {
             placeholder="Add tag..."
             className="text-xs bg-transparent outline-none w-24"
           />
+          <button
+            onClick={exportMarkdown}
+            className="ml-auto text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-pointer shrink-0"
+          >
+            Export .md
+          </button>
         </div>
         <textarea
           value={markdown}
